@@ -1,0 +1,68 @@
+version: '3'
+
+services:
+
+  db:
+    image: postgres:14-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: aviata
+      POSTGRES_USER: aviata
+      POSTGRES_PASSWORD: aviata_2023
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+
+  celery:
+    build: ./airflow
+    env_file:
+      - airflow/docker-airflow-env.env
+    command: celery -A config.celery worker --loglevel=INFO
+    depends_on:
+      - rabbitmq
+      - db
+      - provider_a
+      - provider_b
+
+  celery-beat:
+    build: ./airflow
+    env_file:
+      - airflow/docker-airflow-env.env
+    command: celery -A config.celery beat --loglevel=info
+    depends_on:
+      - rabbitmq
+      - db
+      - provider_a
+      - provider_b
+
+  provider_a:
+    build: ./provider_a
+#    command: uvicorn --reload --port 8008 main:app
+    ports:
+      - "8008:8008"
+
+  provider_b:
+    build: ./provider_b
+#    command: uvicorn --reload --port 8009 main:app
+    ports:
+      - "8009:8009"
+
+  rabbitmq:
+    image: rabbitmq:alpine
+    hostname: rabbit
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    ports:
+      - "5672:5672"
+
+  app:
+    build: ./airflow
+    restart: on-failure
+    env_file:
+      - airflow/docker-airflow-env.env
+    ports:
+      - "9000:9000"
+    depends_on:
+      - db
+      - celery
